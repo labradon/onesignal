@@ -12,6 +12,7 @@ public struct OneSignalNotification: Codable {
     enum CodingKeys: String, CodingKey {
         case users
         case deviceTokens
+        case externalUsers
         
         case title
         case subtitle
@@ -34,7 +35,15 @@ public struct OneSignalNotification: Codable {
      
      Example: `["1dd608f2-c6a1-11e3-851d-000c2940e62c"]`
      */
-    public var users: [String] = []
+    public var users: [String]?
+    
+    /**
+     RECOMMENDED - Target specific devices by custom user IDs assigned via API. Not compatible with
+     any other targeting parameters.
+ 
+     Example: `[“custom-id-assigned-by-api”]`
+     */
+    public var externalUsers: [String]?
     
     /**
      NOT RECOMMENDED - Please consider using include_player_ids instead.
@@ -152,9 +161,19 @@ public struct OneSignalNotification: Codable {
         self.users = users
     }
     
+    public init(message: String, externalUsers: [String]) {
+        self.message = OneSignalMessage(message)
+        self.externalUsers = externalUsers
+    }
+    
     public init(message: OneSignalMessage, users: [String]) {
         self.message = message
         self.users = users
+    }
+    
+    public init(message: OneSignalMessage, externalUsers: [String]) {
+        self.message = message
+        self.externalUsers = externalUsers
     }
     
     public init(title: String?, subtitle: String?, body: String, users: [String], deviceTokens: [String]? = nil, sound: String? = nil, category: String? = nil, sendAfter: String? = nil, additionalData: [String : String]? = nil, attachments: [String : String]? = nil) {
@@ -168,15 +187,45 @@ public struct OneSignalNotification: Codable {
         self.additionalData = additionalData
         self.attachments = attachments
     }
+    
+    public init(title: String?, subtitle: String?, body: String, externalUsers: [String], deviceTokens: [String]? = nil, sound: String? = nil, category: String? = nil, sendAfter: String? = nil, additionalData: [String : String]? = nil, attachments: [String : String]? = nil) {
+        if let title = title { self.title = OneSignalMessage(title) }
+        if let subtitle = subtitle { self.subtitle = OneSignalMessage(subtitle) }
+        self.message = OneSignalMessage(body)
+        self.externalUsers = externalUsers
+        self.sound = sound
+        self.category = category
+        self.sendAfter = sendAfter
+        self.additionalData = additionalData
+        self.attachments = attachments
+    }
 }
 
 extension OneSignalNotification {
     public mutating func addUser(_ id: String) {
-        self.users.append(id)
+        if self.users == nil {
+            self.users = [String]()
+        }
+        self.users!.append(id)
+    }
+    
+    public mutating func addExternalUser(_ id: String) {
+        if self.externalUsers == nil {
+            self.externalUsers = [String]()
+        }
+        self.externalUsers!.append(id)
     }
     
     public mutating func addMessage(_ message: String, language: String = "en") {
         self.message[language] = message
+    }
+    
+    public mutating func addTitle(_ title: String, language: String = "en") {
+        self.title?.messages[language] = title
+    }
+    
+    public mutating func addSubtitle(_ subtitle: String, language: String = "en") {
+        self.subtitle?.messages[language] = subtitle
     }
 }
 
@@ -213,11 +262,12 @@ extension OneSignalNotification {
         
         request.http.headers.add(name: .connection, value: "Keep-Alive")
         request.http.headers.add(name: .authorization, value: "Basic \(app.apiKey)")
-        request.http.headers.add(name: .contentType, value: "applicaiton/json")
+        request.http.headers.add(name: .contentType, value: "application/json")
         
         let payload = OneSignalPayload(
             appId: app.appId,
             playerIds: self.users,
+            externalUserIds: self.externalUsers,
             iosDeviceTokens: self.deviceTokens,
             contents: self.message.messages,
             headings: self.title?.messages,
